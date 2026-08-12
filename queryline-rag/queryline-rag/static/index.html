@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Queryline RAG — Ask any database anything</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0B1E33;
+    --panel: #0F2A47;
+    --line: #1D3F63;
+    --cyan: #6FD3E0;
+    --amber: #E8A33D;
+    --ink: #EDEAE0;
+    --ink-dim: #8AA1BC;
+    --ok: #7BC67E;
+    --err: #E37B6A;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg);
+    background-image: linear-gradient(var(--line) 1px, transparent 1px), linear-gradient(90deg, var(--line) 1px, transparent 1px);
+    background-size: 32px 32px;
+    color: var(--ink); font-family: 'IBM Plex Sans', sans-serif; min-height: 100vh;
+  }
+  .wrap { max-width: 980px; margin: 0 auto; padding: 48px 24px 96px; }
+  header { display: flex; align-items: baseline; justify-content: space-between; border-bottom: 1px solid var(--line); padding-bottom: 20px; margin-bottom: 8px; }
+  .brand { font-family: 'IBM Plex Mono', monospace; font-weight: 700; font-size: 1.15rem; color: var(--cyan); }
+  .brand span { color: var(--ink-dim); font-weight: 400; }
+  .tag { font-family: 'IBM Plex Mono', monospace; font-size: 0.72rem; color: var(--ink-dim); letter-spacing: 0.08em; text-transform: uppercase; }
+  .hero { margin: 40px 0 32px; }
+  .hero-label { font-family: 'IBM Plex Mono', monospace; font-size: 0.72rem; color: var(--amber); letter-spacing: 0.12em; text-transform: uppercase; margin-bottom: 10px; }
+  h1 { font-family: 'IBM Plex Mono', monospace; font-weight: 600; font-size: clamp(1.5rem, 3.6vw, 2.1rem); line-height: 1.25; margin: 0 0 12px; }
+  h1 em { color: var(--cyan); font-style: normal; }
+  .sub { color: var(--ink-dim); font-size: 0.96rem; line-height: 1.6; max-width: 680px; }
+
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 4px; margin-top: 24px; }
+  .panel-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 12px 16px; border-bottom: 1px solid var(--line); font-family: 'IBM Plex Mono', monospace; font-size: 0.72rem; color: var(--ink-dim); letter-spacing: 0.06em; }
+  .panel-body { padding: 20px; }
+
+  label { display: block; font-family: 'IBM Plex Mono', monospace; font-size: 0.72rem; color: var(--ink-dim); letter-spacing: 0.06em; text-transform: uppercase; margin-bottom: 8px; }
+  input[type="text"], textarea {
+    width: 100%; background: #0A1929; border: 1px solid var(--line); border-radius: 3px; color: var(--ink);
+    font-family: 'IBM Plex Sans', sans-serif; font-size: 0.95rem; padding: 12px 14px; resize: none; outline: none;
+    transition: border-color 0.15s ease;
+  }
+  input:focus, textarea:focus { border-color: var(--cyan); }
+  input[type="text"].mono { font-family: 'IBM Plex Mono', monospace; font-size: 0.82rem; }
+  .hint { font-size: 0.78rem; color: var(--ink-dim); margin-top: 6px; }
+
+  button {
+    background: var(--cyan); color: #04141F; border: none; font-family: 'IBM Plex Mono', monospace; font-weight: 600;
+    font-size: 0.85rem; padding: 11px 22px; border-radius: 3px; cursor: pointer; transition: opacity 0.15s ease, transform 0.1s ease;
+  }
+  button:hover { opacity: 0.88; } button:active { transform: translateY(1px); } button:disabled { opacity: 0.4; cursor: not-allowed; }
+  button.secondary { background: transparent; color: var(--cyan); border: 1px solid var(--line); }
+
+  .status { font-family: 'IBM Plex Mono', monospace; font-size: 0.75rem; color: var(--ink-dim); }
+
+  .connect-row { display: flex; gap: 10px; align-items: flex-end; flex-wrap: wrap; }
+  .connect-row > div { flex: 1; min-width: 280px; }
+
+  .badge { display: inline-block; font-family: 'IBM Plex Mono', monospace; font-size: 0.68rem; padding: 2px 9px; border-radius: 20px; margin-left: 8px; vertical-align: middle; }
+  .badge.ok { color: var(--ok); border: 1px solid rgba(123,198,126,0.4); background: rgba(123,198,126,0.08); }
+  .badge.amber { color: var(--amber); border: 1px solid rgba(232,163,61,0.4); background: rgba(232,163,61,0.08); }
+
+  .table-chip-row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+  .table-chip {
+    font-family: 'IBM Plex Mono', monospace; font-size: 0.75rem; color: var(--ink-dim);
+    border: 1px solid var(--line); border-radius: 20px; padding: 5px 12px;
+  }
+
+  .qa-block { display: none; }
+  .qa-block.show { display: block; }
+
+  .retrieval-trace { margin-bottom: 16px; }
+  .retrieval-trace-label { font-family: 'IBM Plex Mono', monospace; font-size: 0.68rem; color: var(--ink-dim); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 8px; }
+  .retrieved-chip {
+    display: inline-flex; align-items: center; gap: 6px; font-family: 'IBM Plex Mono', monospace; font-size: 0.75rem;
+    background: rgba(111,211,224,0.08); border: 1px solid rgba(111,211,224,0.3); color: var(--cyan);
+    border-radius: 20px; padding: 5px 12px; margin: 0 6px 6px 0;
+  }
+  .retrieved-chip .score { color: var(--ink-dim); }
+
+  .sql-block {
+    background: #0A1929; border: 1px solid var(--line); border-left: 3px solid var(--amber); border-radius: 3px;
+    padding: 14px 16px; font-family: 'IBM Plex Mono', monospace; font-size: 0.85rem; color: var(--amber);
+    white-space: pre-wrap; word-break: break-word; margin-bottom: 14px; line-height: 1.6;
+  }
+
+  .meta-row { display: flex; gap: 18px; flex-wrap: wrap; font-family: 'IBM Plex Mono', monospace; font-size: 0.72rem; color: var(--ink-dim); margin-bottom: 14px; }
+
+  .table-scroll { overflow-x: auto; border: 1px solid var(--line); border-radius: 3px; }
+  table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+  th { text-align: left; font-family: 'IBM Plex Mono', monospace; font-size: 0.72rem; letter-spacing: 0.04em; text-transform: uppercase; color: var(--cyan); background: #0A1929; padding: 10px 14px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+  td { padding: 9px 14px; border-bottom: 1px solid rgba(29,63,99,0.5); color: var(--ink); white-space: nowrap; }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: rgba(111,211,224,0.04); }
+
+  .error-block { background: rgba(227,123,106,0.08); border: 1px solid rgba(227,123,106,0.35); border-left: 3px solid var(--err); border-radius: 3px; padding: 14px 16px; font-family: 'IBM Plex Mono', monospace; font-size: 0.82rem; color: var(--err); line-height: 1.6; }
+
+  .feedback-row { margin-top: 14px; display: flex; align-items: center; gap: 10px; }
+  .feedback-row button { padding: 6px 14px; font-size: 0.75rem; }
+
+  .examples { margin-top: 14px; display: flex; flex-wrap: wrap; gap: 8px; }
+  .example-chip { font-family: 'IBM Plex Mono', monospace; font-size: 0.75rem; color: var(--ink-dim); background: transparent; border: 1px solid var(--line); border-radius: 20px; padding: 6px 13px; cursor: pointer; transition: all 0.15s ease; }
+  .example-chip:hover { border-color: var(--cyan); color: var(--cyan); }
+
+  footer { margin-top: 56px; padding-top: 20px; border-top: 1px solid var(--line); font-family: 'IBM Plex Mono', monospace; font-size: 0.72rem; color: var(--ink-dim); display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px; }
+  footer a { color: var(--cyan); text-decoration: none; }
+  footer a:hover { text-decoration: underline; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="brand">QUERYLINE<span>.rag</span></div>
+    <div class="tag">RAG-based · self-correcting · multi-DB</div>
+  </header>
+
+  <section class="hero">
+    <div class="hero-label">// retrieval-augmented text-to-SQL</div>
+    <h1>Connect a database. Ask it<br>anything in <em>plain English.</em></h1>
+    <p class="sub">
+      On connect, Queryline indexes the schema for retrieval instead of dumping every table into
+      the prompt. Each question retrieves only the relevant tables, pulls similar past examples,
+      and self-corrects if the generated SQL fails to run — up to two automatic retries.
+    </p>
+  </section>
+
+  <!-- Connect panel -->
+  <div class="panel" id="connectPanel">
+    <div class="panel-head">
+      <span>1 · connect a database</span>
+      <span id="connectStatus" class="status"></span>
+    </div>
+    <div class="panel-body">
+      <div class="connect-row">
+        <div>
+          <label for="connStr">Connection string (optional — leave blank for the bundled sample DB)</label>
+          <input type="text" id="connStr" class="mono" placeholder="postgresql+psycopg2://readonly_user:pass@host:5432/dbname">
+        </div>
+        <button id="connectBtn">Connect →</button>
+      </div>
+      <div class="hint">Use a read-only DB role. Queryline also blocks writes at the query level, but the DB role is your real safety net.</div>
+      <div class="table-chip-row" id="tableChips"></div>
+    </div>
+  </div>
+
+  <!-- Query panel -->
+  <div class="panel" id="queryPanel" style="display:none;">
+    <div class="panel-head">
+      <span>2 · ask a question <span class="badge ok" id="sessionBadge">connected</span></span>
+      <span class="status" id="queryStatus"></span>
+    </div>
+    <div class="panel-body">
+      <label for="question">Your question</label>
+      <textarea id="question" rows="2" placeholder="e.g. Which customers have open support tickets?"></textarea>
+      <div class="examples" id="examples"></div>
+      <div class="feedback-row" style="margin-top:16px;">
+        <button id="runBtn">Run query →</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Result -->
+  <div class="qa-block" id="resultBlock">
+    <div class="panel">
+      <div class="panel-head"><span>result</span></div>
+      <div class="panel-body">
+        <div class="retrieval-trace">
+          <div class="retrieval-trace-label">Retrieved tables (schema RAG)</div>
+          <div id="retrievedChips"></div>
+        </div>
+        <div class="sql-block" id="sqlBlock"></div>
+        <div class="meta-row" id="metaRow"></div>
+        <div class="table-scroll"><table id="resultTable"></table></div>
+        <div class="feedback-row">
+          <span class="status">Was this SQL correct?</span>
+          <button class="secondary" id="feedbackYes">Yes, save as example</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="qa-block" id="errorBlock">
+    <div class="error-block" id="errorText"></div>
+  </div>
+
+  <footer>
+    <span>Built with FastAPI · Groq · scikit-learn (RAG) · sqlglot</span>
+    <span><a href="https://github.com/" target="_blank">View source →</a></span>
+  </footer>
+</div>
+
+<script>
+let sessionId = null;
+
+const connectBtn = document.getElementById('connectBtn');
+const connectStatus = document.getElementById('connectStatus');
+const tableChips = document.getElementById('tableChips');
+const queryPanel = document.getElementById('queryPanel');
+const sessionBadge = document.getElementById('sessionBadge');
+const runBtn = document.getElementById('runBtn');
+const queryStatus = document.getElementById('queryStatus');
+const resultBlock = document.getElementById('resultBlock');
+const errorBlock = document.getElementById('errorBlock');
+const retrievedChips = document.getElementById('retrievedChips');
+const sqlBlock = document.getElementById('sqlBlock');
+const metaRow = document.getElementById('metaRow');
+const resultTable = document.getElementById('resultTable');
+const errorText = document.getElementById('errorText');
+const feedbackYes = document.getElementById('feedbackYes');
+
+const EXAMPLES = [
+  "Which customers have open support tickets?",
+  "Total revenue by product category",
+  "Which marketing channel drove the most conversions?",
+  "Top 3 customers by total spend"
+];
+const examplesEl = document.getElementById('examples');
+EXAMPLES.forEach(ex => {
+  const chip = document.createElement('button');
+  chip.className = 'example-chip';
+  chip.textContent = ex;
+  chip.onclick = () => { document.getElementById('question').value = ex; };
+  examplesEl.appendChild(chip);
+});
+
+let lastQuestion = '', lastSql = '';
+
+async function connect() {
+  const connStr = document.getElementById('connStr').value.trim();
+  connectBtn.disabled = true;
+  connectStatus.textContent = 'Indexing schema…';
+  try {
+    const res = await fetch('/api/connect', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ connection_string: connStr || null })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || 'Connection failed.');
+
+    sessionId = data.session_id;
+    connectStatus.textContent = `Indexed ${data.table_count} tables.`;
+    tableChips.innerHTML = data.tables.map(t => `<span class="table-chip">${escapeHtml(t)}</span>`).join('');
+    sessionBadge.textContent = data.used_sample_db ? 'sample store db' : 'connected';
+    queryPanel.style.display = 'block';
+  } catch (err) {
+    connectStatus.textContent = err.message;
+  } finally {
+    connectBtn.disabled = false;
+  }
+}
+
+async function runQuery() {
+  const question = document.getElementById('question').value.trim();
+  if (!question) { queryStatus.textContent = 'Type a question first.'; return; }
+  if (!sessionId) { queryStatus.textContent = 'Connect a database first.'; return; }
+
+  runBtn.disabled = true;
+  queryStatus.textContent = 'Retrieving relevant tables…';
+  resultBlock.classList.remove('show');
+  errorBlock.classList.remove('show');
+
+  try {
+    const res = await fetch('/api/query', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ session_id: sessionId, question })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || 'Query failed.');
+
+    lastQuestion = question; lastSql = data.sql;
+
+    retrievedChips.innerHTML = data.retrieved_tables.map(t =>
+      `<span class="retrieved-chip">${escapeHtml(t.table_name)} <span class="score">${t.relevance_score.toFixed(3)}</span></span>`
+    ).join('');
+
+    sqlBlock.textContent = data.sql;
+
+    const attemptLabel = data.attempts > 1
+      ? `${data.attempts} attempts (self-corrected)`
+      : `1 attempt`;
+    metaRow.innerHTML = `
+      <span>${data.row_count} row${data.row_count === 1 ? '' : 's'}</span>
+      <span>${data.elapsed_ms}ms</span>
+      <span>${attemptLabel}</span>
+      <span>${data.few_shot_used} few-shot example${data.few_shot_used === 1 ? '' : 's'} used</span>
+    `;
+
+    let thead = '<thead><tr>' + data.columns.map(c => `<th>${escapeHtml(c)}</th>`).join('') + '</tr></thead>';
+    let tbody = '<tbody>' + data.rows.map(row =>
+      '<tr>' + row.map(v => `<td>${v === null ? '—' : escapeHtml(String(v))}</td>`).join('') + '</tr>'
+    ).join('') + '</tbody>';
+    resultTable.innerHTML = thead + tbody;
+
+    resultBlock.classList.add('show');
+    queryStatus.textContent = 'Done.';
+  } catch (err) {
+    errorText.textContent = err.message;
+    errorBlock.classList.add('show');
+    queryStatus.textContent = 'Failed.';
+  } finally {
+    runBtn.disabled = false;
+  }
+}
+
+async function sendFeedback() {
+  if (!sessionId || !lastQuestion || !lastSql) return;
+  feedbackYes.disabled = true;
+  feedbackYes.textContent = 'Saved ✓';
+  try {
+    await fetch('/api/feedback', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ session_id: sessionId, question: lastQuestion, sql: lastSql })
+    });
+  } catch (e) { /* non-critical */ }
+}
+
+function escapeHtml(str) {
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}
+
+connectBtn.addEventListener('click', connect);
+runBtn.addEventListener('click', runQuery);
+feedbackYes.addEventListener('click', sendFeedback);
+document.getElementById('question').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) runQuery();
+});
+</script>
+</body>
+</html>

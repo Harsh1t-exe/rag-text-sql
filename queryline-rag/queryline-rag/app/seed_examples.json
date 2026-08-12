@@ -1,0 +1,18 @@
+[
+  {
+    "question": "Which customers have never placed an order?",
+    "sql": "SELECT c.customer_id, c.name FROM customers c LEFT JOIN orders o ON c.customer_id = o.customer_id WHERE o.order_id IS NULL"
+  },
+  {
+    "question": "What is the total revenue from completed orders?",
+    "sql": "SELECT SUM(oi.quantity * oi.unit_price) AS total_revenue FROM order_items oi JOIN orders o ON oi.order_id = o.order_id WHERE o.status = 'completed'"
+  },
+  {
+    "question": "Which support tickets are still open, ordered by priority?",
+    "sql": "SELECT ticket_id, subject, priority, created_at FROM support_tickets WHERE status = 'open' ORDER BY CASE priority WHEN 'high' THEN 1 WHEN 'medium' THEN 2 ELSE 3 END"
+  },
+  {
+    "question": "Which marketing channel drove the most conversions?",
+    "sql": "SELECT mc.channel, COUNT(*) AS conversions FROM campaign_conversions cc JOIN marketing_campaigns mc ON cc.campaign_id = mc.campaign_id GROUP BY mc.channel ORDER BY conversions DESC"
+  }
+]

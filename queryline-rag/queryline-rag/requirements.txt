@@ -1,0 +1,10 @@
+fastapi==0.115.0
+uvicorn[standard]==0.30.6
+sqlalchemy==2.0.34
+sqlglot==25.20.2
+requests==2.32.3
+python-multipart==0.0.9
+psycopg2-binary==2.9.9
+pymysql==1.1.1
+scikit-learn==1.5.2
+numpy==2.1.1
