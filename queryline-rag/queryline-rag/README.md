@@ -5,6 +5,8 @@ text-to-SQL wrapper that stuffs the entire schema into every prompt, this
 version **retrieves** only the relevant tables and similar past examples
 per question, and **self-corrects** when generated SQL fails to execute.
 
+# Live demo : https://rag-text-sql.onrender.com/
+
 ## Why RAG matters here (the pitch)
 
 A naive text-to-SQL tool dumps the whole schema into the prompt every time.
