@@ -1,7 +1,7 @@
 """
 Text-to-SQL generation via Groq's free API (https://console.groq.com).
 Groq offers a free tier with no credit card required and serves fast,
-open-source models (Llama 3.3 70B) - good accuracy on SQL generation
+open-source models on their LPU hardware - good accuracy on SQL generation
 without running your own GPU server.
 
 Get a free API key at https://console.groq.com/keys and set it as the
@@ -16,7 +16,11 @@ import os
 import requests
 
 GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions"
-GROQ_MODEL = "llama-3.3-70b-versatile"
+# Groq deprecated the llama-3.3-70b-versatile family. gpt-oss-120b is the
+# current recommended general-purpose/reasoning model on Groq's free tier.
+# If this model is ever deprecated too, check https://console.groq.com/docs/models
+# or GET https://api.groq.com/openai/v1/models with your API key for the live list.
+GROQ_MODEL = "openai/gpt-oss-120b"
 MAX_RETRIES = 2
 
 SYSTEM_PROMPT = """You are an expert SQL generator. Given a set of relevant
@@ -54,6 +58,14 @@ def _call_groq(messages: list[dict]) -> str:
         },
         timeout=30,
     )
+    if response.status_code == 404:
+        raise RuntimeError(
+            f"Groq model '{GROQ_MODEL}' was not found (404). Groq periodically "
+            "deprecates models. Check current model IDs at "
+            "https://console.groq.com/docs/models or GET "
+            "https://api.groq.com/openai/v1/models with your API key, then "
+            "update GROQ_MODEL in app/llm.py."
+        )
     response.raise_for_status()
     data = response.json()
     return data["choices"][0]["message"]["content"]
